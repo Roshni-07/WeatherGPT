@@ -1,8 +1,11 @@
+import logging
+
 from fastapi import APIRouter
 from pydantic import BaseModel
 
 from app.services import gemini_service, weather_service, geocode_service, confidence_engine
 
+logger = logging.getLogger("weathergpt.query")
 router = APIRouter()
 
 
@@ -34,7 +37,8 @@ async def handle_query(req: QueryRequest):
     try:
         intent = gemini_service.extract_intent(req.text, req.persona or "general")
         gemini_ok = True
-    except Exception:
+    except Exception as e:
+        logger.warning("intent extraction failed: %s", e)
         # Gemini down or misconfigured -- fall back to a neutral intent
         # instead of a single canned string everywhere downstream.
         intent = {
@@ -69,7 +73,8 @@ async def handle_query(req: QueryRequest):
             theme = weather_service.map_condition_to_theme(current)
             weather_summary = weather_service.summarize_for_prompt(current)
             location_name = location_name or weather_summary.get("location_name")
-        except Exception:
+        except Exception as e:
+            logger.warning("weather fetch failed: %s", e)
             weather_ok = False
 
     # 4. Confidence
@@ -83,7 +88,8 @@ async def handle_query(req: QueryRequest):
     if gemini_ok and weather_ok:
         try:
             answer = gemini_service.compose_response(intent, weather_summary, confidence_label, req.language or "en")
-        except Exception:
+        except Exception as e:
+            logger.warning("response composition failed: %s", e)
             answer = _fallback_answer(weather_summary, confidence_label)
     elif weather_ok:
         answer = _fallback_answer(weather_summary, confidence_label)
