@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "WeatherGPT Intent",
+  "type": "object",
+  "properties": {
+    "location": {
+      "type": "string",
+      "description": "Village/city/district name or lat,lon string as given by user"
+    },
+    "time_window": {
+      "type": "string",
+      "enum": ["now", "today", "tomorrow", "this_week", "historical", "unspecified"]
+    },
+    "parameter": {
+      "type": "string",
+      "enum": ["rain", "temperature", "wind", "cyclone", "flood", "general", "aqi", "sea_state"]
+    },
+    "persona_context": {
+      "type": "string",
+      "enum": ["farmer", "fisherman", "general", "aviation", "researcher", "disaster_officer"]
+    }
+  },
+  "required": ["location", "time_window", "parameter", "persona_context"]
+}
