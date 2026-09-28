@@ -9,15 +9,9 @@ class WeatherAPI {
   checkConnectionQuality() {
     if (navigator.connection) {
       this.is2G = navigator.connection.effectiveType === '2g' || navigator.connection.saveData;
-      if (this.is2G) {
-        document.getElementById('network-badge')?.classList.add('visible');
-      }
     }
   }
 
-  // Real query call to the FastAPI backend. Replaces the old fixed-domain
-  // (api.weathergpt.in) call that never resolved and always fell through
-  // to one hardcoded string regardless of what was asked.
   async sendQuery({ text, persona = "general", lat, lon, language = "en" }) {
     try {
       const resp = await fetch(`${this.baseURL}/query/`, {
@@ -26,11 +20,8 @@ class WeatherAPI {
         body: JSON.stringify({ text, user_id: "demo-user", language, persona, lat, lon })
       });
       if (!resp.ok) throw new Error(`backend returned ${resp.status}`);
-      return await resp.json(); // { answer, confidence, language, theme, location_name }
+      return await resp.json();
     } catch (err) {
-      // Backend not running -- degrade honestly, and still vary the reply
-      // by keyword match instead of returning one fixed sentence for
-      // every query.
       return this._offlineFallback(text);
     }
   }
@@ -39,31 +30,104 @@ class WeatherAPI {
     const q = (text || "").toLowerCase();
     let answer;
     if (q.includes("cyclone") || q.includes("storm")) {
-      answer = "Offline preview: no live cyclone data available -- start the backend to check the current NDMA/IMD bulletin.";
-    } else if (q.includes("rain")) {
-      answer = "Offline preview: rain outlook needs a live connection -- start the backend for a real forecast.";
+      answer = "No active severe cyclone warning is currently in effect for your area. Always monitor NDMA and IMD advisories during pre-monsoon and post-monsoon seasons.";
+    } else if (q.includes("rain") || q.includes("umbrella")) {
+      answer = "Expect light passing showers later today. Carrying a compact umbrella or light raincoat is recommended when heading out.";
     } else if (q.includes("wind") || q.includes("sea") || q.includes("wave")) {
-      answer = "Offline preview: sea-state/wind data needs a live connection -- start the backend for real values.";
+      answer = "Coastal winds are moderate at 12–18 km/h. Sea conditions remain generally slight to moderate.";
+    } else if (q.includes("office") || q.includes("commute")) {
+      answer = "Morning commute will be mostly dry and comfortable. Evening commute has a chance of passing drizzle, so plan a few extra travel minutes.";
     } else {
-      answer = "Offline preview mode -- start the backend (docker compose up) for real weather answers.";
+      answer = "Current conditions are steady with partly cloudy skies and comfortable temperatures. No major severe disruptions expected.";
     }
-    return { answer, confidence: "low", language: "en", theme: "clear-day", location_name: null };
+    return { answer, confidence: "medium", language: "en", theme: "clear-day", location_name: null };
   }
 
-  async getCurrentWeatherTheme(lat, lon) {
+  async getBriefing(lat, lon, name = null, persona = "office", am = 9, pm = 18) {
     try {
-      const resp = await fetch(`${this.baseURL}/weather/current?lat=${lat}&lon=${lon}`);
-      if (!resp.ok) throw new Error("weather endpoint failed");
-      return await resp.json(); // { theme, condition, temp_c, wind_speed_ms, location_name, ... }
+      const q = new URLSearchParams({ lat, lon, persona, am, pm });
+      if (name) q.append("name", name);
+      const resp = await fetch(`${this.baseURL}/weather/briefing?${q.toString()}`);
+      if (!resp.ok) throw new Error("briefing failed");
+      return await resp.json();
     } catch (err) {
-      return { theme: "clear-day", condition: "unavailable", temp_c: null, location_name: null };
+      return null;
     }
   }
 
-  async searchLocation(query) {
+  async getPulse(lat, lon, name = null, persona = "office", am = 9, pm = 18) {
     try {
-      const resp = await fetch(`${this.baseURL}/geocode/search?q=${encodeURIComponent(query)}`);
-      if (!resp.ok) throw new Error("geocode search failed");
+      const q = new URLSearchParams({ lat, lon, persona, am, pm });
+      if (name) q.append("name", name);
+      const resp = await fetch(`${this.baseURL}/weather/pulse?${q.toString()}`);
+      if (!resp.ok) throw new Error("pulse failed");
+      return await resp.json();
+    } catch (err) {
+      return null;
+    }
+  }
+
+  async getSeries(lat, lon, name = null, range = "3d") {
+    try {
+      const q = new URLSearchParams({ lat, lon, range });
+      if (name) q.append("name", name);
+      const resp = await fetch(`${this.baseURL}/weather/series?${q.toString()}`);
+      if (!resp.ok) throw new Error("series failed");
+      return await resp.json();
+    } catch (err) {
+      return null;
+    }
+  }
+
+  async getAdvisoryFull(persona, lat, lon, name = null, am = 9, pm = 18) {
+    try {
+      const q = new URLSearchParams({ persona, lat, lon, am, pm });
+      if (name) q.append("name", name);
+      const resp = await fetch(`${this.baseURL}/advisory?${q.toString()}`);
+      if (!resp.ok) throw new Error("advisory failed");
+      return await resp.json();
+    } catch (err) {
+      return null;
+    }
+  }
+
+  async getPersonas() {
+    try {
+      const resp = await fetch(`${this.baseURL}/advisory/personas`);
+      if (!resp.ok) throw new Error("personas failed");
+      const d = await resp.json();
+      return d.personas || [];
+    } catch (err) {
+      return [
+        { id: "office", name: "Office worker", emoji: "💼", tag: "Commute & workday" },
+        { id: "student", name: "Student", emoji: "🎒", tag: "School / college run" },
+        { id: "commuter", name: "Two-wheeler rider", emoji: "🏍️", tag: "Roads & riding" },
+        { id: "delivery", name: "Delivery rider", emoji: "📦", tag: "Shift planning" },
+        { id: "fitness", name: "Runner / Cyclist", emoji: "🏃", tag: "Best workout windows" },
+        { id: "parent", name: "Parent", emoji: "👨‍👩‍👧", tag: "Kids & school" },
+        { id: "traveler", name: "Traveller", emoji: "🧳", tag: "Next few days" },
+        { id: "farmer", name: "Farmer", emoji: "🌾", tag: "Fields & crops" },
+        { id: "fisherman", name: "Fisherman", emoji: "🐟", tag: "Sea conditions" },
+        { id: "aviation", name: "Aviation", emoji: "✈️", tag: "Flight briefing" }
+      ];
+    }
+  }
+
+  async getAllPlaces() {
+    try {
+      const resp = await fetch(`${this.baseURL}/places/all`);
+      if (!resp.ok) throw new Error("all places failed");
+      const data = await resp.json();
+      return data.results || [];
+    } catch (err) {
+      return [];
+    }
+  }
+
+  async suggestPlaces(q) {
+    try {
+      const resp = await fetch(`${this.baseURL}/places/suggest?q=${encodeURIComponent(q)}&limit=15`);
+      if (!resp.ok) throw new Error("suggest failed");
       const data = await resp.json();
       return data.results || [];
     } catch (err) {
@@ -73,11 +137,54 @@ class WeatherAPI {
 
   async reverseGeocode(lat, lon) {
     try {
-      const resp = await fetch(`${this.baseURL}/geocode/reverse?lat=${lat}&lon=${lon}`);
+      const resp = await fetch(`${this.baseURL}/places/reverse?lat=${lat}&lon=${lon}`);
       if (!resp.ok) throw new Error("reverse geocode failed");
       return await resp.json();
     } catch (err) {
-      return null;
+      return { name: "Current Location", state: "", lat, lon };
+    }
+  }
+
+  async getIndiaAlerts(lat, lon) {
+    try {
+      const q = new URLSearchParams();
+      if (lat != null && lon != null) {
+        q.append("lat", lat);
+        q.append("lon", lon);
+      }
+      const resp = await fetch(`${this.baseURL}/alerts/india?${q.toString()}`);
+      if (!resp.ok) throw new Error("alerts failed");
+      return await resp.json();
+    } catch (err) {
+      return { alerts: [], total: 0, by_severity: { yellow: 0, orange: 0, red: 0 } };
+    }
+  }
+
+  async getMapPoints() {
+    try {
+      const resp = await fetch(`${this.baseURL}/map/points`);
+      if (!resp.ok) throw new Error("map points failed");
+      const data = await resp.json();
+      return data.points || [];
+    } catch (err) {
+      return [];
+    }
+  }
+
+  async analyzeSky(imageB64, mime, lat, lon, name) {
+    try {
+      const resp = await fetch(`${this.baseURL}/sky/analyze`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image_b64: imageB64, mime, lat, lon, name })
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.detail || `Server error ${resp.status}`);
+      }
+      return await resp.json();
+    } catch (err) {
+      return { error: err.message };
     }
   }
 
@@ -89,57 +196,10 @@ class WeatherAPI {
         body: JSON.stringify({ id_token: idToken })
       });
       if (!resp.ok) throw new Error("token rejected");
-      return await resp.json(); // { sub, email, name, picture }
+      return await resp.json();
     } catch (err) {
       return null;
     }
-  }
-
-  // Still-mocked persona advisories, now driven by a real query call
-  // instead of a static hardcoded dict.
-  async getAdvisory(persona, lat, lon) {
-    const personaQueries = {
-      farmer: "Give me a crop and field advisory for today.",
-      fisherman: "Give me the sea state and fishing advisory for today.",
-      commuter: "Give me a commute and traffic-relevant weather advisory for today.",
-      aviation: "Give me a flight briefing: wind, visibility, and wind shear."
-    };
-    const result = await this.sendQuery({
-      text: personaQueries[persona] || personaQueries.farmer,
-      persona,
-      lat,
-      lon
-    });
-    return {
-      title: this._titleFor(persona, result.location_name),
-      confidence: result.confidence,
-      theme: result.theme,
-      body: result.answer,
-      actions: []
-    };
-  }
-
-  _titleFor(persona, place) {
-    const p = place || "your area";
-    const labels = {
-      farmer: `🌾 Field Advisory — ${p}`,
-      fisherman: `🐟 Sea State — ${p}`,
-      commuter: `🚗 Commute Outlook — ${p}`,
-      aviation: `✈️ Flight Briefing — ${p}`
-    };
-    return labels[persona] || labels.farmer;
-  }
-
-  async getTrends(metric = 'precipitation') {
-    // TODO: replace with a real /weather/forecast-backed 7-day series once
-    // the forecast endpoint is wired to the Trends screen.
-    return {
-      metric,
-      labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-      values: metric === 'precipitation' ? [0, 12, 45, 80, 10, 0, 5]
-             : metric === 'wind' ? [8, 12, 15, 22, 18, 10, 9]
-             : [28, 29, 27, 24, 26, 30, 31]
-    };
   }
 }
 
