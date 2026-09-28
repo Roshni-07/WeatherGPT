@@ -8,12 +8,15 @@ relying on the default below — model names on the free tier change over time.
 """
 import os
 import json
-import google.generativeai as genai
+try:  # optional: the app works fully without it
+    import google.generativeai as genai
+except Exception:  # noqa: BLE001
+    genai = None
 
 GEMINI_KEY = os.getenv("GEMINI_API_KEY", "")
 MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
 
-if GEMINI_KEY:
+if GEMINI_KEY and genai:
     genai.configure(api_key=GEMINI_KEY)
 
 VALID_TIME_WINDOWS = {"now", "today", "tomorrow", "this_week", "historical", "unspecified"}
@@ -59,8 +62,8 @@ Rules:
 
 
 def _model():
-    if not GEMINI_KEY:
-        raise RuntimeError("GEMINI_API_KEY is not set")
+    if not GEMINI_KEY or genai is None:
+        raise RuntimeError("Gemini is not configured")
     return genai.GenerativeModel(MODEL_NAME)
 
 
@@ -98,3 +101,58 @@ def compose_response(intent: dict, weather_summary: dict, confidence_label: str,
     )
     resp = _model().generate_content(prompt)
     return resp.text.strip()
+
+
+# ------------------------------------------------------------------ v2 helpers
+# The core weather engine is deterministic. Gemini is only used for things a
+# rules engine can't do: free-form questions, translation, and sky photos.
+import time as _time
+
+_llm_state = {"bad_until": 0}
+
+
+def available():
+    """True if a key is set and we haven't just seen a hard failure."""
+    return bool(GEMINI_KEY) and genai is not None and _time.time() > _llm_state["bad_until"]
+
+
+def _mark_bad(err):
+    # Back off for 5 minutes after an auth/model error so every request doesn't wait on a broken key.
+    msg = str(err).lower()
+    if "api key" in msg or "api_key" in msg or "permission" in msg or "not found" in msg or "404" in msg or "403" in msg or "400" in msg:
+        _llm_state["bad_until"] = _time.time() + 300
+
+
+def _text(prompt, parts=None):
+    try:
+        model = _model()
+        resp = model.generate_content(parts if parts else prompt)
+        return (resp.text or "").strip()
+    except Exception as e:  # noqa: BLE001
+        _mark_bad(e)
+        raise
+
+
+def to_english(text):
+    return _text("Translate this weather question into plain English. Keep place names. Reply with the translation only.\n\n" + text)
+
+
+def from_english(text, language_name):
+    return _text(f"Translate the following weather answer into {language_name}. Keep every number, unit, time and place name exactly as is. "
+                 f"Keep it simple and friendly. Reply with the translation only.\n\n{text}")
+
+
+def grounded_answer(question, facts_json, persona="general"):
+    return _text(
+        "You are WeatherGPT, a calm, plain-spoken weather assistant for people in India. Answer the user's question using ONLY the facts below. "
+        "If the facts don't cover it, say so honestly. Never invent numbers. Use simple words, max 4 sentences, no markdown headings.\n\n"
+        f"User type: {persona}\nFACTS (JSON): {facts_json}\n\nQuestion: {question}")
+
+
+def analyze_sky(image_bytes, mime, facts_json):
+    prompt = (
+        "You are WeatherGPT. Look at this sky photo and describe, in simple words, what you can actually see: cloud amount and type, light, haze/visibility, "
+        "and any visible signs of developing weather. Then compare it with the forecast FACTS below in 1-2 sentences. "
+        "Be honest: a photo cannot give precise measurements, so treat it as one extra signal, not proof. Max 5 sentences.\n\n"
+        f"FACTS (JSON): {facts_json}")
+    return _text(prompt, parts=[{"mime_type": mime, "data": image_bytes}, prompt])
