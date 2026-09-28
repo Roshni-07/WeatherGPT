@@ -204,3 +204,5 @@ class WeatherAPI {
 }
 
 window.apiService = new WeatherAPI();
+window.WeatherAPI = WeatherAPI;
+

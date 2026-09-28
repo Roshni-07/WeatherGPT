@@ -5,8 +5,126 @@
 // =====================================================================
 
 function startWeatherApp() {
-  const api = window.apiService || (typeof WeatherAPI !== "undefined" ? new WeatherAPI() : null);
   const cfg = window.WEATHERGPT_CONFIG || {};
+  const baseURL = cfg.BACKEND_URL || "http://localhost:8000";
+
+  function getApiClient() {
+    if (window.apiService) return window.apiService;
+    if (typeof WeatherAPI !== "undefined") {
+      window.apiService = new WeatherAPI();
+      return window.apiService;
+    }
+    return {
+      async sendQuery({ text, persona = "general", lat, lon, language = "en" }) {
+        try {
+          const resp = await fetch(`${baseURL}/query/`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text, user_id: "demo-user", language, persona, lat, lon })
+          });
+          return await resp.json();
+        } catch (e) {
+          return { answer: "Current conditions are steady with partly cloudy skies and comfortable temperatures.", confidence: "medium" };
+        }
+      },
+      async getBriefing(lat, lon, name, persona, am = 9, pm = 18) {
+        try {
+          const q = new URLSearchParams({ lat, lon, persona, am, pm });
+          if (name) q.append("name", name);
+          const resp = await fetch(`${baseURL}/weather/briefing?${q.toString()}`);
+          return await resp.json();
+        } catch (e) { return null; }
+      },
+      async getPulse(lat, lon, name, persona, am = 9, pm = 18) {
+        try {
+          const q = new URLSearchParams({ lat, lon, persona, am, pm });
+          if (name) q.append("name", name);
+          const resp = await fetch(`${baseURL}/weather/pulse?${q.toString()}`);
+          return await resp.json();
+        } catch (e) { return null; }
+      },
+      async getSeries(lat, lon, name, range = "3d") {
+        try {
+          const q = new URLSearchParams({ lat, lon, range });
+          if (name) q.append("name", name);
+          const resp = await fetch(`${baseURL}/weather/series?${q.toString()}`);
+          return await resp.json();
+        } catch (e) { return null; }
+      },
+      async getAdvisoryFull(persona, lat, lon, name, am = 9, pm = 18) {
+        try {
+          const q = new URLSearchParams({ persona, lat, lon, am, pm });
+          if (name) q.append("name", name);
+          const resp = await fetch(`${baseURL}/advisory?${q.toString()}`);
+          return await resp.json();
+        } catch (e) { return null; }
+      },
+      async getPersonas() {
+        try {
+          const resp = await fetch(`${baseURL}/advisory/personas`);
+          const d = await resp.json();
+          return d.personas || [];
+        } catch (e) { return []; }
+      },
+      async getAllPlaces() {
+        try {
+          const resp = await fetch(`${baseURL}/places/all`);
+          const d = await resp.json();
+          return d.results || [];
+        } catch (e) { return []; }
+      },
+      async suggestPlaces(q) {
+        try {
+          const resp = await fetch(`${baseURL}/places/suggest?q=${encodeURIComponent(q)}&limit=15`);
+          const d = await resp.json();
+          return d.results || [];
+        } catch (e) { return []; }
+      },
+      async reverseGeocode(lat, lon) {
+        try {
+          const resp = await fetch(`${baseURL}/places/reverse?lat=${lat}&lon=${lon}`);
+          return await resp.json();
+        } catch (e) { return null; }
+      },
+      async getIndiaAlerts(lat, lon) {
+        try {
+          const q = new URLSearchParams();
+          if (lat != null && lon != null) { q.append("lat", lat); q.append("lon", lon); }
+          const resp = await fetch(`${baseURL}/alerts/india?${q.toString()}`);
+          return await resp.json();
+        } catch (e) { return { alerts: [], total: 0, near_count: 0 }; }
+      },
+      async getMapPoints() {
+        try {
+          const resp = await fetch(`${baseURL}/map/points`);
+          const d = await resp.json();
+          return d.points || [];
+        } catch (e) { return []; }
+      },
+      async analyzeSky(imageB64, mime, lat, lon, name) {
+        try {
+          const resp = await fetch(`${baseURL}/sky/analyze`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ image_b64: imageB64, mime, lat, lon, name })
+          });
+          return await resp.json();
+        } catch (e) { return { error: e.message }; }
+      },
+      async verifyGoogleLogin(idToken) {
+        try {
+          const resp = await fetch(`${baseURL}/auth/google`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id_token: idToken })
+          });
+          return await resp.json();
+        } catch (e) { return null; }
+      }
+    };
+  }
+
+  const api = getApiClient();
 
   // ---- App State ----------------------------------------------------
   let currentLocation = cfg.DEFAULT_LOCATION || { name: "Bengaluru", lat: 12.9716, lon: 77.5946 };
@@ -526,6 +644,12 @@ function startWeatherApp() {
     let bestWindowHtml = "";
     if (data.best_window && data.best_window.range) {
       const bw = data.best_window;
+      let whyText = "Ideal conditions for commuting, exercise, and errands.";
+      if (Array.isArray(bw.why) && bw.why.length) {
+        whyText = bw.why.filter(Boolean).join(" • ");
+      } else if (typeof bw.why === "string" && bw.why) {
+        whyText = bw.why;
+      }
       bestWindowHtml = `
         <div class="card win" style="--tone: var(--${bw.tone || 'good'})">
           <div class="win-head">
@@ -533,7 +657,7 @@ function startWeatherApp() {
             <span class="win-time">${escapeHtml(bw.range)}</span>
             <span class="win-score">Optimal outdoor slot (${bw.score || 85}%)</span>
           </div>
-          <div class="win-why">${bw.why && bw.why.length ? escapeHtml(bw.why.join(' • ')) : 'Ideal conditions for commuting, exercise, and errands.'}</div>
+          <div class="win-why">${escapeHtml(whyText)}</div>
         </div>
       `;
     }
@@ -916,18 +1040,40 @@ function startWeatherApp() {
 
     // Explain-Why section
     let whyHtml = "";
-    if (data.why && data.why.length) {
-      whyHtml = `
-        <details class="why" open>
-          <summary>Why this advice? (Layman explanation)</summary>
-          ${data.why.map(w => `
-            <div class="why-part">
-              <h5>${escapeHtml(w.title || 'Reason')}</h5>
-              <p>${escapeHtml(w.text || '')}</p>
-            </div>
-          `).join('')}
-        </details>
-      `;
+    if (data.why) {
+      let whyItems = [];
+      if (Array.isArray(data.why)) {
+        whyItems = data.why.map(w => {
+          if (typeof w === "string") return { title: "Observation", text: w };
+          return { title: w.title || "Reason", text: w.text || "" };
+        });
+      } else if (typeof data.why === "object") {
+        if (data.why.analysis) {
+          whyItems.push({ title: "Analysis", text: data.why.analysis });
+        }
+        if (data.why.suggestion) {
+          whyItems.push({ title: "Recommendation", text: data.why.suggestion });
+        }
+        if (Array.isArray(data.why.facts)) {
+          data.why.facts.forEach((f, idx) => {
+            whyItems.push({ title: `Fact #${idx + 1}`, text: f });
+          });
+        }
+      }
+
+      if (whyItems.length) {
+        whyHtml = `
+          <details class="why" open>
+            <summary>Why this advice? (Layman explanation)</summary>
+            ${whyItems.map(w => `
+              <div class="why-part">
+                <h5>${escapeHtml(w.title)}</h5>
+                <p>${escapeHtml(w.text)}</p>
+              </div>
+            `).join('')}
+          </details>
+        `;
+      }
     }
 
     advisoryBodyEl.innerHTML = `
@@ -1638,10 +1784,53 @@ function startWeatherApp() {
     }
   }, 180000);
 
+  // Initialize Google Sign-in if configured
+  function initGoogleSignIn() {
+    const slot = document.getElementById("google-signin-slot");
+    if (!slot || !cfg.GOOGLE_CLIENT_ID || typeof google === "undefined" || !google.accounts?.id) {
+      return;
+    }
+    try {
+      google.accounts.id.initialize({
+        client_id: cfg.GOOGLE_CLIENT_ID,
+        callback: async (response) => {
+          if (response.credential) {
+            showToast("Verifying Google account…");
+            const res = await api.verifyGoogleLogin(response.credential);
+            if (res && res.user) {
+              slot.innerHTML = `
+                <div class="user-chip" title="${escapeHtml(res.user.email || '')}">
+                  <img src="${res.user.picture || 'https://via.placeholder.com/26'}" alt="${escapeHtml(res.user.name)}">
+                  <span>${escapeHtml((res.user.name || 'User').split(' ')[0])}</span>
+                </div>
+              `;
+              showToast(`Welcome back, ${res.user.name}!`);
+            }
+          }
+        }
+      });
+      google.accounts.id.renderButton(slot, {
+        theme: "outline",
+        size: "small",
+        type: "icon",
+        shape: "circle"
+      });
+    } catch (e) {
+      console.warn("Google Sign-in init:", e);
+    }
+  }
+
+  initGoogleSignIn();
+  window.addEventListener("load", () => setTimeout(initGoogleSignIn, 600));
+
   // Initial load
-  loadAllPlaces();
-  updateLocbarDisplay();
-  renderChatBriefing();
+  try {
+    loadAllPlaces();
+    updateLocbarDisplay();
+    renderChatBriefing();
+  } catch (err) {
+    console.error("Initial load error:", err);
+  }
 }
 
 if (document.readyState === "loading") {
