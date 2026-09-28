@@ -2,250 +2,130 @@
 <html lang="en" data-theme="clear-day">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>WeatherGPT — AI Weather Intelligence for India</title>
-  <meta name="description" content="Hyperlocal conversational weather AI for farmers, fishermen, commuters, aviation, and disaster response across India.">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0f14">
+  <title>WeatherGPT — Ask what the weather means</title>
+  <meta name="description" content="Personal weather intelligence for India: plain-language forecasts, best-time finder, route weather, live alerts and maps.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Albert+Sans:wght@300;400;500;600;700&family=Alumni+Sans:wght@100;300;400;600&family=Noto+Sans+Bengali:wght@400;500;700&family=Noto+Sans+Devanagari:wght@400;500;700&family=Noto+Sans+Kannada:wght@400;500;700&family=Noto+Sans+Tamil:wght@400;500;700&family=Noto+Sans+Telugu:wght@400;500;700&family=Roboto+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Albert+Sans:wght@300;400;500;600;700&family=Alumni+Sans:wght@200;300;400;600;700&family=Noto+Sans+Bengali:wght@400;600&family=Noto+Sans+Devanagari:wght@400;600&family=Noto+Sans+Kannada:wght@400;600&family=Noto+Sans+Tamil:wght@400;600&family=Noto+Sans+Telugu:wght@400;600&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="stylesheet" href="src/styles.css">
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="src/config.js"></script>
 </head>
 <body>
-  <!-- Live Background Canvas Surface -->
-  <canvas id="weather-canvas" class="weather-canvas" aria-hidden="true"></canvas>
+  <canvas id="sky" aria-hidden="true"></canvas>
+  <div id="sky-demo-label" class="sky-demo" hidden></div>
 
-  <!-- 2G / Low-Bandwidth Indicator -->
-  <div id="network-badge" class="network-status" role="status" aria-live="polite">
-    <span class="status-dot"></span>
-    <span class="status-text">2G Mode Active • Cached Telemetry</span>
-  </div>
-
-  <!-- Severe Alert Takeover Banner (Hidden on default load) -->
-  <div id="alert-takeover" class="alert-takeover" role="alert" aria-live="assertive" hidden style="display: none;">
-    <div class="alert-content">
-      <div class="alert-header">
-        <span class="alert-badge">SEVERE WEATHER ALERT</span>
-        <span class="alert-time" id="alert-timestamp">JUST NOW</span>
+  <div class="app" id="app">
+    <header class="topbar">
+      <div class="brand" id="brand" title="Triple-click for the sky time-lapse demo">
+        <span class="logo" aria-hidden="true"><i></i><i></i></span>
+        <div><b>WEATHERGPT</b><small>Ask what the weather means</small></div>
       </div>
-      <h1 id="alert-title" class="alert-title">CYCLONIC STORM WARNING — BAY OF BENGAL</h1>
-      <p id="alert-description" class="alert-desc">Sustained wind speeds 85–95 km/h expected near coastal Odisha & Northern AP. Wave action up to 4.5 meters. Halt offshore operations immediately.</p>
-      <div class="alert-actions">
-        <button id="alert-broadcast-btn" class="ks-button ks-button-primary" aria-label="Trigger Broadcast SMS and Emergency Call Dialing">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-          Emergency SMS Broadcast
-        </button>
-        <button id="alert-dismiss-btn" class="ks-button ks-button-ghost" onclick="dismissAlertBanner()">Dismiss Banner</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- App Shell Container -->
-  <div class="app-shell">
-    <header class="app-header">
-      <div class="ks-brand">
-        <div class="ks-mark" aria-hidden="true"></div>
-        <div class="brand-text">
-          <span class="ks-wordmark">WEATHERGPT</span>
-          <span class="brand-subtitle">AI Atmospheric Intelligence</span>
-        </div>
-      </div>
-
-      <div class="header-controls">
-        <div id="confidence-indicator" class="confidence-badge high" title="Live confidence score from the last query">
-          <span class="badge-pulse"></span>
-          <span class="badge-label">—</span>
-        </div>
+      <div class="top-right">
+        <div class="live-pill" id="live-pill" title="Data freshness"><i></i><span id="live-text">LIVE</span></div>
         <div id="google-signin-slot"></div>
-        <button id="contrast-toggle" class="icon-button" aria-label="Toggle High Contrast Mode">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 0 0 20z"/></svg>
-        </button>
       </div>
     </header>
 
-    <!-- Location bar: real device location or typed search, used by every
-         screen (chat, advisory, map theme) instead of a hardcoded region -->
-    <div class="location-bar">
-      <button id="detect-location-btn" type="button">📍 Use my location</button>
-      <input type="text" id="location-search" placeholder="Or type a city..." autocomplete="off">
-      <span id="current-location-label" class="mono-tag" style="white-space:nowrap;"></span>
-      <div id="location-suggestions" class="location-suggestions"></div>
-    </div>
+    <button class="locbar" id="loc-btn" type="button" aria-haspopup="dialog">
+      <span class="pin" aria-hidden="true">📍</span>
+      <span class="loc-name" id="loc-name">Finding you…</span>
+      <span class="loc-sub" id="loc-sub"></span>
+      <span class="chev" aria-hidden="true">▾</span>
+    </button>
 
-    <main class="main-content">
-      <!-- VIEW 1: Home / Chat Stream -->
-      <section id="view-home" class="view-panel active" aria-labelledby="nav-home">
-        <div class="chat-container">
-          <div id="chat-stream" class="chat-stream" role="log" aria-live="polite">
-            <div class="chat-message ai-message">
-              <div class="message-avatar">AI</div>
-              <div class="message-bubble">
-                <p>Namaste. Watching the sky across your sector. Inquire about field soil moisture, sea state, visibility corridors, or localized alerts in any regional language.</p>
-                <div class="message-meta">Updated 2 mins ago • Live Radar Feed Connected</div>
-              </div>
-            </div>
-          </div>
+    <div class="banner alert" id="alert-banner" hidden></div>
+    <div class="banner warn" id="net-banner" hidden></div>
 
-          <div class="suggestion-scroll">
-            <span class="suggestion-label">QUICK ADVISORY INQUIRIES:</span>
-            <div class="suggestion-chips">
-              <button class="chip" data-query="Will it rain in Mandya before harvest tomorrow afternoon?">🌾 Crop Harvest Rain (Mandya)</button>
-              <button class="chip" data-query="Sea roughness and wave height off Malpe Port for 12-hour trawling?">🐟 Malpe Offshore Waves</button>
-              <button class="chip" data-query="Visibility and wind shear for turboprop arrival at Shimoga airport?">✈️ Flight Corridor (Shimoga)</button>
-              <button class="chip" data-query="Ground saturation & landslide risk along Western Ghats NH-75?">⛰️ Landslide Hazard (NH-75)</button>
-            </div>
-          </div>
-
-          <form id="chat-form" class="chat-input-bar">
-            <input type="text" id="chat-input" class="ks-input" placeholder="Ask in Hindi, Kannada, Tamil, Bengali..." aria-label="Weather query input">
-            <button type="submit" class="ks-button ks-button-primary" aria-label="Send message">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+    <main class="views">
+      <!-- CHAT -->
+      <section class="view active" id="view-chat" aria-label="Chat">
+        <div class="stream" id="stream"></div>
+        <div class="dock">
+          <div class="chips-head"><span class="live-dot"></span><span id="chips-label">Suggested for right now</span></div>
+          <div class="chips" id="chips"></div>
+          <form class="composer" id="composer" autocomplete="off">
+            <button type="button" class="ic-btn" id="sky-photo-btn" title="Analyze a sky photo" aria-label="Analyze a sky photo">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-2h6l2 2h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+            </button>
+            <input type="file" id="sky-file" accept="image/*" hidden>
+            <input type="text" id="ask" placeholder="Ask anything… “best time to cycle tomorrow?”" aria-label="Ask WeatherGPT" enterkeyhint="send">
+            <button type="button" class="ic-btn mic" id="mic-btn" title="Speak" aria-label="Speak your question">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+            </button>
+            <button type="submit" class="send" id="send-btn" aria-label="Send">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
             </button>
           </form>
         </div>
-      </section>
-
-      <!-- VIEW 2: Persona-Aware Advisory Cards -->
-      <section id="view-advisory" class="view-panel" aria-labelledby="nav-advisory">
-        <div class="advisory-grid">
-          <div class="persona-selector" role="tablist" aria-label="Target Persona">
-            <button class="persona-btn active" role="tab" aria-selected="true" data-persona="farmer">🌾 Farmer</button>
-            <button class="persona-btn" role="tab" aria-selected="false" data-persona="fisherman">🐟 Fisherman</button>
-            <button class="persona-btn" role="tab" aria-selected="false" data-persona="commuter">🚗 Commuter</button>
-            <button class="persona-btn" role="tab" aria-selected="false" data-persona="aviation">✈️ Aviation</button>
-          </div>
-
-          <div id="advisory-card-content" class="advisory-card-panel">
-            <!-- Dynamic Content Injected -->
-          </div>
+        <div class="voice" id="voice" hidden>
+          <button class="voice-close" id="voice-close" type="button" aria-label="Close voice mode">✕</button>
+          <div class="orb-wrap"><span class="ring r1"></span><span class="ring r2"></span><span class="ring r3"></span><button class="orb" id="orb" type="button" aria-label="Tap to stop"><svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button></div>
+          <div class="voice-status" id="voice-status">Listening…</div>
+          <div class="voice-text" id="voice-text">Say something like “will it rain when I leave office?”</div>
+          <div class="voice-lang" id="voice-lang"></div>
         </div>
       </section>
 
-      <!-- VIEW 3: Severe Alerts View -->
-      <section id="view-alerts" class="view-panel" aria-labelledby="nav-alerts">
-        <div class="panel-header">
-          <h2>Active Severe Advisories & Bulletins</h2>
-          <span class="mono-tag">NDMA / IMD RADAR STREAM</span>
-        </div>
-        <div id="alerts-list" class="alerts-feed">
-          <div class="alert-item">
-            <span class="mono-tag">IMD CYCLONE BULLETIN • BAY OF BENGAL</span>
-            <h3 style="margin: 8px 0; color: var(--ks-champagne);">Deep Depression Warning</h3>
-            <p style="font-size: 0.875rem;">Moving NW at 14 km/h. Expected landfall between Gopalpur and Puri within 24 hrs.</p>
+      <!-- ADVISORY -->
+      <section class="view" id="view-advisory" aria-label="Advisory">
+        <div class="persona-bar" id="persona-bar" role="tablist"></div>
+        <div class="scroll" id="advisory-body"></div>
+      </section>
+
+      <!-- ALERTS -->
+      <section class="view" id="view-alerts" aria-label="Alerts">
+        <div class="scroll" id="alerts-body"></div>
+      </section>
+
+      <!-- MAP -->
+      <section class="view" id="view-map" aria-label="Map">
+        <div class="map-shell">
+          <div id="map"></div>
+          <div class="map-layers" id="map-layers" role="tablist"></div>
+          <div class="map-legend" id="map-legend"></div>
+          <div class="map-radar" id="map-radar" hidden>
+            <button id="radar-play" type="button" aria-label="Play or pause radar">⏸</button>
+            <span id="radar-time">Radar</span>
           </div>
+          <div class="map-route" id="map-route" hidden></div>
+          <div class="map-card" id="map-card" hidden></div>
         </div>
       </section>
 
-      <!-- VIEW 4: Crowd Map View -->
-      <section id="view-map" class="view-panel" aria-labelledby="nav-map">
-        <div class="map-view-container">
-          <div class="map-controls">
-            <button class="map-filter active" data-layer="clouds">Cloud Cover</button>
-            <button class="map-filter" data-layer="rain">Rain Radar</button>
-            <button class="map-filter" data-layer="crowd">Crowd Pins (14)</button>
-          </div>
-          <div id="interactive-map-canvas" class="mock-map-canvas">
-            <div class="map-pin warning" data-source="crowd" style="top: 42%; left: 58%;" tabindex="0" aria-label="Silk Board Flyover Waterlogging">
-              <span class="pin-dot"></span>
-              <div class="pin-card">
-                <strong>Silk Board Flyover</strong>
-                <p>Crowd Report: 1.5 ft waterlogging • 12 mins ago</p>
-              </div>
-            </div>
-            <div class="map-pin clear" data-source="sensor" style="top: 65%; left: 34%;" tabindex="0" aria-label="Mandya Agri Zone Clear">
-              <span class="pin-dot"></span>
-              <div class="pin-card">
-                <strong>Mandya Agri Zone</strong>
-                <p>Sensor: 28°C • Optimal Field Drying</p>
-              </div>
-            </div>
-            <div class="map-pin warning" data-source="crowd" style="top: 30%; left: 25%;" tabindex="0" aria-label="Yeshwanthpur heavy rain report">
-              <span class="pin-dot"></span>
-              <div class="pin-card">
-                <strong>Yeshwanthpur</strong>
-                <p>Crowd Report: heavy rain starting • 4 mins ago</p>
-              </div>
-            </div>
-            <div class="map-pin clear" data-source="sensor" style="top: 22%; left: 70%;" tabindex="0" aria-label="Whitefield sensor clear">
-              <span class="pin-dot"></span>
-              <div class="pin-card">
-                <strong>Whitefield</strong>
-                <p>Sensor: 26°C • Clear</p>
-              </div>
-            </div>
-          </div>
-        </div>
+      <!-- TRENDS -->
+      <section class="view" id="view-trends" aria-label="Trends">
+        <div class="scroll" id="trends-body"></div>
       </section>
-
-      <!-- VIEW 5: Voice Orb Mode -->
-      <section id="view-voice" class="view-panel" aria-labelledby="nav-voice">
-        <div class="voice-mode-wrapper">
-          <div class="voice-status-text" id="voice-status">Tap Orb to Listen</div>
-          
-          <button id="voice-orb-btn" class="voice-orb" aria-label="Voice conversation trigger">
-            <div class="orb-core"></div>
-            <div class="orb-ring ring-1"></div>
-            <div class="orb-ring ring-2"></div>
-            <div class="orb-ring ring-3"></div>
-          </button>
-
-          <div class="voice-transcript" id="voice-transcript">
-            "Speak in Kannada, Hindi, or English..."
-          </div>
-        </div>
-      </section>
-
-      <!-- VIEW 6: Trends & Analytics -->
-      <section id="view-trends" class="view-panel" aria-labelledby="nav-trends">
-        <div class="trends-container">
-          <div class="panel-header">
-            <h2>7-Day Atmospheric & Soil Trends</h2>
-            <div class="metric-switch">
-              <button class="metric-btn active" data-metric="precipitation">Precipitation</button>
-              <button class="metric-btn" data-metric="temperature">Temp (°C)</button>
-              <button class="metric-btn" data-metric="wind">Wind (km/h)</button>
-            </div>
-          </div>
-
-          <div id="trends-chart-wrapper" class="chart-wrapper">
-            <!-- Dynamic SVG Sparklines Injected -->
-          </div>
-        </div>
-      </section>
-
     </main>
 
-    <!-- Bottom Navigation Rail -->
-    <nav class="bottom-nav" aria-label="Primary Navigation">
-      <button class="nav-item active" id="nav-home" data-target="view-home" aria-label="Chat Home">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-        <span>Chat</span>
-      </button>
-      <button class="nav-item" id="nav-advisory" data-target="view-advisory" aria-label="AI Advisories">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-        <span>Advisory</span>
-      </button>
-      <button class="nav-item" id="nav-alerts" data-target="view-alerts" aria-label="Severe Alerts">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-        <span>Alerts</span>
-      </button>
-      <button class="nav-item" id="nav-map" data-target="view-map" aria-label="Map and Crowd Reports">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
-        <span>Map</span>
-      </button>
-      <button class="nav-item" id="nav-voice" data-target="view-voice" aria-label="Voice Orb Mode">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-        <span>Voice</span>
-      </button>
-      <button class="nav-item" id="nav-trends" data-target="view-trends" aria-label="Climate Trends">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
-        <span>Trends</span>
-      </button>
+    <nav class="tabbar" id="tabbar" aria-label="Sections">
+      <button class="tab active" data-tab="chat"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4A8 8 0 1 1 20 12z"/></svg><span>Chat</span></button>
+      <button class="tab" data-tab="advisory"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg><span>Advisory</span></button>
+      <button class="tab" data-tab="alerts"><svg viewBox="0 0 24 24"><path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18h.01"/></svg><span>Alerts</span><em class="tab-badge" id="alerts-badge" hidden>0</em></button>
+      <button class="tab" data-tab="map"><svg viewBox="0 0 24 24"><path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2z"/><path d="M9 4v14M15 6v14"/></svg><span>Map</span></button>
+      <button class="tab" data-tab="trends"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-9"/><path d="M15 6h6v6"/></svg><span>Trends</span></button>
     </nav>
   </div>
 
-  <script src="src/services/api.js"></script>
-  <script src="src/app.js"></script>
+  <!-- Location picker -->
+  <div class="sheet" id="loc-sheet" hidden role="dialog" aria-label="Choose location">
+    <div class="sheet-card">
+      <div class="sheet-head">
+        <input type="text" id="loc-input" placeholder="Search a city or town…" autocomplete="off" spellcheck="false">
+        <button type="button" id="loc-close" class="ic-btn" aria-label="Close">✕</button>
+      </div>
+      <button type="button" class="use-gps" id="use-gps"><span>🎯</span><div><b>Use my current location</b><small>Most accurate — uses your device GPS</small></div></button>
+      <div class="sheet-list" id="loc-list"></div>
+    </div>
+  </div>
+
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script type="module" src="src/app.js"></script>
 </body>
 </html>
