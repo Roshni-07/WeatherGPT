@@ -1,3 +1,4 @@
+[README .md](https://github.com/user-attachments/files/32769399/README.md)
 <div align="center">
 
 # 🌦️ WeatherGPT
@@ -654,8 +655,7 @@ WeatherGPT/
 │   ├── 04_App_Flow_WeatherGPT.md
 │   ├── 05_Backend_Schema_WeatherGPT.md
 │   ├── 06_Implementation_Plan_WeatherGPT.md
-│   ├── 07_AI_Build_Prompts_WeatherGPT.md
-│   └── 08_AI_Prompt_Sequence_v2_WeatherGPT.md
+│   └── 07_AI_Architecture_WeatherGPT.md
 │
 ├── ml/
 │   ├── prompts/
@@ -1100,8 +1100,7 @@ The repository includes deeper design and engineering documentation:
 - [`docs/04_App_Flow_WeatherGPT.md`](docs/04_App_Flow_WeatherGPT.md) — Application flow
 - [`docs/05_Backend_Schema_WeatherGPT.md`](docs/05_Backend_Schema_WeatherGPT.md) — Backend schema
 - [`docs/06_Implementation_Plan_WeatherGPT.md`](docs/06_Implementation_Plan_WeatherGPT.md) — Implementation plan
-- [`docs/07_AI_Build_Prompts_WeatherGPT.md`](docs/07_AI_Build_Prompts_WeatherGPT.md) — AI build prompts
-- [`docs/08_AI_Prompt_Sequence_v2_WeatherGPT.md`](docs/08_AI_Prompt_Sequence_v2_WeatherGPT.md) — AI prompt sequence
+- [`docs/07_AI_Architecture_WeatherGPT.md`](docs/07_AI_Architecture_WeatherGPT.md) — Public AI architecture, grounding strategy, intelligence pipeline, and scalability path
 
 ---
 
