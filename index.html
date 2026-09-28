@@ -10,10 +10,10 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Albert+Sans:wght@300;400;500;600;700&family=Alumni+Sans:wght@200;300;400;600;700&family=Noto+Sans+Bengali:wght@400;600&family=Noto+Sans+Devanagari:wght@400;600&family=Noto+Sans+Kannada:wght@400;600&family=Noto+Sans+Tamil:wght@400;600&family=Noto+Sans+Telugu:wght@400;600&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="src/styles.css?v=8">
+  <link rel="stylesheet" href="src/styles.css?v=9">
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="src/config.js?v=8"></script>
-  <script src="src/services/api.js?v=8"></script>
+  <script src="src/config.js?v=9"></script>
+  <script src="src/services/api.js?v=9"></script>
 </head>
 <body>
   <canvas id="sky" aria-hidden="true"></canvas>
@@ -86,6 +86,17 @@
       <section class="view" id="view-map" aria-label="Map">
         <div class="map-shell">
           <div id="map"></div>
+          <button type="button" class="map-pinpoint-btn" id="map-pinpoint-btn" title="Pinpoint My Location" aria-label="Pinpoint My Location">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="7"/>
+              <line x1="12" y1="1" x2="12" y2="4"/>
+              <line x1="12" y1="20" x2="12" y2="23"/>
+              <line x1="1" y1="12" x2="4" y2="12"/>
+              <line x1="20" y1="12" x2="23" y2="12"/>
+              <circle cx="12" cy="12" r="2.5" fill="currentColor"/>
+            </svg>
+            <span>Pinpoint Me</span>
+          </button>
           <div class="map-layers" id="map-layers" role="tablist"></div>
           <div class="map-legend" id="map-legend"></div>
           <div class="map-radar" id="map-radar" hidden>
@@ -127,6 +138,6 @@
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="src/app.js?v=8"></script>
+  <script src="src/app.js?v=9"></script>
 </body>
 </html>

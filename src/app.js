@@ -681,12 +681,12 @@ function startWeatherApp() {
         <div class="hero-top">
           <div>
             <div class="hero-temp">${heroTemp}</div>
-            <div class="hero-head">${escapeHtml(headline)}</div>
+            <div class="hero-head">${formatMarkdown(headline).replace(/^<p>|<\/p>$/g, '')}</div>
           </div>
           <div class="hero-emoji">${emoji}</div>
         </div>
         <div class="hero-lines">
-          ${sentences.map(s => `<p>${escapeHtml(s)}</p>`).join('')}
+          ${sentences.map(s => `<p>${formatMarkdown(s).replace(/^<p>|<\/p>$/g, '')}</p>`).join('')}
         </div>
         <div class="hero-meta">
           <span class="pill">💧 Humidity ${now.humidity || '—'}%</span>
@@ -761,8 +761,30 @@ function startWeatherApp() {
     // Update AI Bubble with layman plain-English response
     const bubble = aiMsg.querySelector(".bubble");
     if (bubble) {
+      let blocksHtml = "";
+      if (res.blocks && Array.isArray(res.blocks)) {
+        for (const b of res.blocks) {
+          if (b.type === "strip" && b.items && b.items.length) {
+            blocksHtml += `
+              <div class="strip" style="margin-top: 10px;">
+                ${b.items.map(it => `
+                  <div class="cell" style="--tone: var(--${it.tone || 'ok'})">
+                    <div class="t">${escapeHtml(it.label)}</div>
+                    <div class="e">${it.emoji || '⛅'}</div>
+                    <div class="d">${it.temp != null ? it.temp + '°' : '—'}</div>
+                    <div class="p">${it.pop ? it.pop + '%' : ''}</div>
+                    <div class="bar"></div>
+                  </div>
+                `).join('')}
+              </div>
+            `;
+          }
+        }
+      }
+
       bubble.innerHTML = `
-        <p>${escapeHtml(res.answer || "Unable to get an answer right now. Please try again.")}</p>
+        <div class="bubble-content">${formatMarkdown(res.answer || "Unable to get an answer right now. Please try again.")}</div>
+        ${blocksHtml}
         <div class="meta">
           <span class="conf ${res.confidence || 'high'}"><i></i> ${(res.confidence || 'HIGH').toUpperCase()} confidence</span>
           <span class="small muted">📍 ${escapeHtml(res.location_name || currentLocation.name)}</span>
@@ -1152,9 +1174,9 @@ function startWeatherApp() {
         <h2>${escapeHtml(heroTitle)}</h2>
         <p>${escapeHtml(heroDesc)}</p>
         <div class="al-counts">
-          <span class="sev red"><i></i> ${sev.red} Red</span>
-          <span class="sev orange"><i></i> ${sev.orange} Orange</span>
-          <span class="sev yellow"><i></i> ${sev.yellow} Yellow</span>
+          <button type="button" class="sev red" data-filter="red" title="Filter Red Alerts"><i></i> ${sev.red} Red</button>
+          <button type="button" class="sev orange" data-filter="orange" title="Filter Orange Alerts"><i></i> ${sev.orange} Orange</button>
+          <button type="button" class="sev yellow" data-filter="yellow" title="Filter Yellow Alerts"><i></i> ${sev.yellow} Yellow</button>
         </div>
         <div class="illo">${getAlertSvg("storm")}</div>
       </div>
@@ -1165,7 +1187,9 @@ function startWeatherApp() {
       <div class="filters" id="alert-filters">
         <button type="button" class="filter on" data-filter="all">All India (${total})</button>
         <button type="button" class="filter" data-filter="near">Near You (${nearCount})</button>
-        <button type="button" class="filter" data-filter="severe">Orange & Red (${sev.orange + sev.red})</button>
+        <button type="button" class="filter" data-filter="red">🔴 Red (${sev.red})</button>
+        <button type="button" class="filter" data-filter="orange">🟠 Orange (${sev.orange})</button>
+        <button type="button" class="filter" data-filter="yellow">🟡 Yellow (${sev.yellow})</button>
         <button type="button" class="filter" data-filter="storm">Rain & Storm</button>
       </div>
 
@@ -1175,13 +1199,15 @@ function startWeatherApp() {
     // Initialize Leaflet Mini-Map
     initAlertsMiniMap(data.alerts || []);
 
-    // Filter listeners
-    const filterBtns = alertsBodyEl.querySelectorAll("#alert-filters .filter");
-    filterBtns.forEach(btn => {
+    // Filter listeners on both filter bar and hero badges
+    const allFilterBtns = alertsBodyEl.querySelectorAll("#alert-filters .filter, .al-counts .sev");
+    allFilterBtns.forEach(btn => {
       btn.addEventListener("click", () => {
-        filterBtns.forEach(b => b.classList.remove("on"));
-        btn.classList.add("on");
-        renderAlertCards(data.alerts || [], btn.getAttribute("data-filter"));
+        const filter = btn.getAttribute("data-filter");
+        allFilterBtns.forEach(b => {
+          b.classList.toggle("on", b.getAttribute("data-filter") === filter);
+        });
+        renderAlertCards(data.alerts || [], filter);
       });
     });
 
@@ -1244,8 +1270,14 @@ function startWeatherApp() {
     let filtered = alerts;
     if (filter === "near") {
       filtered = alerts.filter(a => a.near || (a.distance_km && a.distance_km <= 200));
+    } else if (filter === "red") {
+      filtered = alerts.filter(a => (a.color && a.color.toLowerCase() === "red") || a.severity === 3);
+    } else if (filter === "orange") {
+      filtered = alerts.filter(a => (a.color && a.color.toLowerCase() === "orange") || a.severity === 2);
+    } else if (filter === "yellow") {
+      filtered = alerts.filter(a => (a.color && a.color.toLowerCase() === "yellow") || a.severity === 1);
     } else if (filter === "severe") {
-      filtered = alerts.filter(a => a.color === "red" || a.color === "orange");
+      filtered = alerts.filter(a => a.color === "red" || a.color === "orange" || a.severity >= 2);
     } else if (filter === "storm") {
       filtered = alerts.filter(a => a.type === "storm" || a.type === "rain");
     }
@@ -1376,9 +1408,77 @@ function startWeatherApp() {
       `;
     }
 
+    // Wire up pinpoint location button
+    const pinpointBtn = document.getElementById("map-pinpoint-btn");
+    if (pinpointBtn) {
+      pinpointBtn.onclick = () => pinpointUserOnMap();
+    }
+
     // Fetch live cities weather across India
     mapPointsData = await api.getMapPoints();
     drawMapCityBubbles("news");
+  }
+
+  let userPinpointMarker = null;
+
+  function pinpointUserOnMap() {
+    if (!mapInstance) return;
+
+    function applyPinpoint(lat, lon, name) {
+      mapInstance.flyTo([lat, lon], 10, { animate: true, duration: 1.2 });
+
+      if (userPinpointMarker) {
+        mapInstance.removeLayer(userPinpointMarker);
+      }
+
+      // Add a distinct glowing pinpoint beacon
+      const pinpointHtml = `
+        <div class="user-beacon">
+          <span class="beacon-wave"></span>
+          <span class="beacon-wave w2"></span>
+          <span class="beacon-dot">📍</span>
+        </div>
+      `;
+
+      userPinpointMarker = L.marker([lat, lon], {
+        icon: L.divIcon({
+          className: "custom-city-icon",
+          html: pinpointHtml,
+          iconSize: [40, 40],
+          iconAnchor: [20, 20]
+        }),
+        zIndexOffset: 1000
+      }).addTo(mapInstance);
+
+      userPinpointMarker.bindPopup(`
+        <div style="font-family: var(--font); color: #fff; padding: 4px; min-width: 140px;">
+          <b style="font-size: 14px;">📍 You Are Here</b>
+          <div style="color: var(--accent); font-weight: 600; margin-top: 2px;">${escapeHtml(name)}</div>
+          <small style="color: #aaa; display: block; margin-top: 4px;">${lat.toFixed(3)}°N, ${lon.toFixed(3)}°E</small>
+        </div>
+      `).openPopup();
+
+      showToast(`Pinpointed location: ${name}`);
+    }
+
+    if (navigator.geolocation) {
+      showToast("Detecting GPS position…");
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          const { latitude: lat, longitude: lon } = pos.coords;
+          const rev = await api.reverseGeocode(lat, lon);
+          const name = rev?.name || currentLocation.name || "Your Position";
+          selectCity({ name, state: rev?.state || "", lat, lon });
+          applyPinpoint(lat, lon, name);
+        },
+        () => {
+          applyPinpoint(currentLocation.lat, currentLocation.lon, currentLocation.name);
+        },
+        { timeout: 7000 }
+      );
+    } else {
+      applyPinpoint(currentLocation.lat, currentLocation.lon, currentLocation.name);
+    }
   }
 
   let cityMarkersGroup = null;
@@ -1769,6 +1869,44 @@ function startWeatherApp() {
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#039;");
+  }
+
+  function formatMarkdown(str) {
+    if (!str) return "";
+    let raw = String(str).trim();
+
+    // Escape basic HTML characters first
+    let out = raw
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+
+    // Bold: **text** or __text__
+    out = out.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    out = out.replace(/__(.+?)__/g, '<strong>$1</strong>');
+
+    // Italic: *text* or _text_
+    out = out.replace(/(^|[^\*])\*([^\*\n]+)\*([^\*]|$)/g, '$1<em>$2</em>$3');
+    out = out.replace(/(^|[^_])_([^_\n]+)_([^_]|$)/g, '$1<em>$2</em>$3');
+
+    // Bullet list items (- item or * item)
+    out = out.replace(/(?:^|\n)\s*[\*\-]\s+(.+)/g, (match, item) => {
+      return `\n<li class="chat-li">${item}</li>`;
+    });
+    out = out.replace(/(<li class="chat-li"[\s\S]+?<\/li>)+/g, '<ul class="chat-ul">$&</ul>');
+
+    // Numbered list items (1. item)
+    out = out.replace(/(?:^|\n)\s*(\d+)\.\s+(.+)/g, (match, num, item) => {
+      return `\n<li class="chat-oli"><span class="chat-num">${num}.</span> <span>${item}</span></li>`;
+    });
+    out = out.replace(/(<li class="chat-oli"[\s\S]+?<\/li>)+/g, '<ul class="chat-ol">$&</ul>');
+
+    // Paragraph breaks
+    const parts = out.split(/\n\s*\n/).filter(p => p.trim());
+    return parts.map(p => {
+      if (p.startsWith("<ul") || p.startsWith("<ol")) return p;
+      return `<p>${p.replace(/\n/g, '<br>')}</p>`;
+    }).join("");
   }
 
   async function refreshActiveView() {
