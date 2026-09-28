@@ -14,7 +14,7 @@ except Exception:  # noqa: BLE001
     genai = None
 
 GEMINI_KEY = os.getenv("GEMINI_API_KEY", "")
-MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
 
 if GEMINI_KEY and genai:
     genai.configure(api_key=GEMINI_KEY)
