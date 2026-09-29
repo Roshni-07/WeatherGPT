@@ -3,12 +3,15 @@ from dotenv import load_dotenv
 
 # Load .env explicitly before anything else imports, since services read
 # their keys via os.getenv() at import time.
-load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
+ROOT_DIR = Path(__file__).resolve().parent.parent.parent
+load_dotenv(ROOT_DIR / ".env")
 
 import os  # noqa: E402
 
 from fastapi import FastAPI  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+from fastapi.responses import FileResponse  # noqa: E402
+from fastapi.staticfiles import StaticFiles  # noqa: E402
 
 from app.routers import advisory, alerts, auth, geocode, map as map_router, places, query, route, sky, weather  # noqa: E402
 from app.services import gemini_service, openmeteo  # noqa: E402
@@ -45,3 +48,13 @@ def health_config():
         "openweathermap_key_set": bool(os.getenv("OPENWEATHERMAP_API_KEY")),
         "google_client_id_set": bool(os.getenv("GOOGLE_CLIENT_ID")),
     }
+
+
+# Serve frontend static assets & UI directly from the same server
+app.mount("/src", StaticFiles(directory=ROOT_DIR / "src"), name="src")
+
+
+@app.get("/")
+@app.get("/index.html")
+async def serve_index():
+    return FileResponse(ROOT_DIR / "index.html")

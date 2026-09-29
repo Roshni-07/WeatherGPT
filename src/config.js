@@ -4,7 +4,7 @@
 //   -> OAuth 2.0 Client ID (type: Web application). Add your dev URL
 //   (e.g. http://localhost:5500) under "Authorized JavaScript origins".
 window.WEATHERGPT_CONFIG = {
-  BACKEND_URL: "http://localhost:8000",
+  BACKEND_URL: (typeof window !== "undefined" && window.location && window.location.origin) ? window.location.origin : "http://localhost:8000",
   GOOGLE_CLIENT_ID: "138769986717-52vn8g5d07c5rk89jj0tfs0cv9dltum0.apps.googleusercontent.com",
   DEFAULT_LOCATION: { name: "Bengaluru", lat: 12.9716, lon: 77.5946 },
 };
