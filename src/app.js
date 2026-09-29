@@ -1,7 +1,7 @@
 // =====================================================================
 // WeatherGPT — Personal Weather Intelligence for India
 // Living sky canvas, multi-persona advisory, all-India alerts,
-// Aaj Tak news-style weather map, and Google Stocks-style trends scrubber.
+// Interactive weather map, and Google Stocks-style trends scrubber.
 // =====================================================================
 
 function startWeatherApp() {
@@ -344,7 +344,7 @@ function startWeatherApp() {
     if (locNameEl) locNameEl.textContent = currentLocation.name;
     if (locSubEl) {
       const statePart = currentLocation.state ? `${currentLocation.state} • ` : "";
-      locSubEl.textContent = `${statePart}Live weather`;
+      locSubEl.textContent = `${statePart}Current conditions`;
     }
   }
 
@@ -598,7 +598,7 @@ function startWeatherApp() {
     if (!data) {
       streamEl.innerHTML = `
         <div class="card err-card">
-          <b>Unable to fetch live briefing</b>
+          <b>Unable to fetch briefing</b>
           <p class="muted">Check internet connection or ensure backend is running.</p>
           <button class="retry" type="button" onclick="window.location.reload()">Retry</button>
         </div>
@@ -1356,7 +1356,7 @@ function startWeatherApp() {
   }
 
   // ===================================================================
-  // 10. Aaj Tak News-Style Weather Map (Requirement 10)
+  // 10. Interactive India Weather Map (Requirement 10)
   // ===================================================================
   const mapLayersEl = document.getElementById("map-layers");
   const mapLegendEl = document.getElementById("map-legend");
@@ -1386,7 +1386,7 @@ function startWeatherApp() {
     // Layer options
     if (mapLayersEl) {
       mapLayersEl.innerHTML = `
-        <button type="button" class="layer on" data-layer="news">📺 Aaj Tak Weather</button>
+        <button type="button" class="layer on" data-layer="news">🌦️ Weather Overview</button>
         <button type="button" class="layer" data-layer="temp">🌡️ Temperature</button>
         <button type="button" class="layer" data-layer="rain">🌧️ Rain Chance</button>
         <button type="button" class="layer" data-layer="wind">💨 Wind Flow</button>
@@ -1396,17 +1396,34 @@ function startWeatherApp() {
         btn.addEventListener("click", () => {
           mapLayersEl.querySelectorAll(".layer").forEach(b => b.classList.remove("on"));
           btn.classList.add("on");
-          drawMapCityBubbles(btn.getAttribute("data-layer"));
+          const layerType = btn.getAttribute("data-layer");
+          drawMapCityBubbles(layerType);
+          updateMapLegend(layerType);
         });
       });
     }
 
-    if (mapLegendEl) {
-      mapLegendEl.innerHTML = `
-        <span class="legend-bar" style="background: linear-gradient(90deg, #5ec8d4, #f2c94c, #eb5757);"></span>
-        <span>Aaj Tak India Live News Map</span>
-      `;
+    function updateMapLegend(layer = "news") {
+      if (!mapLegendEl) return;
+      if (layer === "rain") {
+        mapLegendEl.innerHTML = `
+          <span class="legend-bar" style="background: linear-gradient(90deg, #4aa8ff, #1d68bd);"></span>
+          <span>0% — 100% Rain</span>
+        `;
+      } else if (layer === "wind") {
+        mapLegendEl.innerHTML = `
+          <span class="legend-bar" style="background: linear-gradient(90deg, #51cf66, #ff922b);"></span>
+          <span>0 — 60+ km/h</span>
+        `;
+      } else {
+        mapLegendEl.innerHTML = `
+          <span class="legend-bar" style="background: linear-gradient(90deg, #5ec8d4, #f2c94c, #eb5757);"></span>
+          <span>15°C — 35°C+</span>
+        `;
+      }
     }
+
+    updateMapLegend("news");
 
     // Wire up pinpoint location button
     const pinpointBtn = document.getElementById("map-pinpoint-btn");
@@ -1501,7 +1518,7 @@ function startWeatherApp() {
     }).addTo(cityMarkersGroup);
     userMarker.bindTooltip(`📍 You are in ${currentLocation.name}`, { permanent: false });
 
-    // Add Aaj Tak style floating news badges
+    // Add floating city weather badges
     for (const city of mapPointsData) {
       const temp = city.temp != null ? `${city.temp}°` : "—";
       const emoji = city.emoji || "🌤️";
