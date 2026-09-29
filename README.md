@@ -1,5 +1,4 @@
 [README.md](https://github.com/user-attachments/files/32781289/README.md)
-[README .md](https://github.com/user-attachments/files/32769399/README.md)
 <div align="center">
 
 # 🌦️ WeatherGPT
